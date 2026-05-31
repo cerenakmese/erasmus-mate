@@ -9,6 +9,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
+const startGrpcServer = require('./grpc-server');
 
 // Sağlık Kontrolü
 app.get('/health', (req, res) => {
@@ -43,24 +44,23 @@ app.post('/api/students/register', async (req, res) => {
     }
 });
 
-// 2. ÖĞRENCİ GİRİŞ (LOGIN) UÇ NOKTASI
+
 app.post('/api/students/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Kullanıcıyı bul
+
         const user = await pool.query('SELECT * FROM students WHERE email = $1', [email]);
         if (user.rows.length === 0) {
             return res.status(401).json({ error: 'Invalid Credentials' });
         }
 
-        // Şifreyi doğrula
+
         const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid Credentials' });
         }
 
-        // JWT Token oluştur
         const token = jwt.sign(
             { student_id: user.rows[0].id, email: user.rows[0].email },
             JWT_SECRET,
@@ -75,5 +75,6 @@ app.post('/api/students/login', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Student Profile Service running on port ${PORT}`);
+    console.log(`Student Profile Service (REST) running on port ${PORT}`);
+    startGrpcServer();
 });

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package student;
+
+service StudentService {
+    // Öğrenci ID'sine göre temel profil bilgilerini getiren fonksiyon
+    rpc GetStudentProfile (GetStudentRequest) returns (StudentProfileResponse);
+}
+
+
+message GetStudentRequest {
+    int32 student_id = 1;
+}
+
+
+message StudentProfileResponse {
+    int32 id = 1;
+    string first_name = 2;
+    string last_name = 3;
+    string email = 4;
+    string home_university = 5;
+    string host_university = 6;
+}

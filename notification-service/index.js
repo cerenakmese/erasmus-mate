@@ -111,7 +111,34 @@ app.put('/api/notifications/:id/read', async (req, res) => {
         });
     }
 });
+app.post('/api/notifications/document-expiration', async (req, res) => {
+    try {
+        const { student_id, document_name, expiration_date } = req.body;
 
+        if (!student_id || !document_name || !expiration_date) {
+            return res.status(400).json({
+                error: 'student_id, document_name and expiration_date are required'
+            });
+        }
+
+        const message = `Your document "${document_name}" is expiring on ${expiration_date}. Please renew it before the deadline.`;
+
+        const result = await pool.query(
+            `INSERT INTO notifications (student_id, type, message)
+             VALUES ($1, $2, $3)
+             RETURNING *`,
+            [student_id, 'DOCUMENT_EXPIRATION', message]
+        );
+
+        res.status(201).json({
+            message: 'Document expiration notification created successfully',
+            notification: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error creating document expiration notification:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 app.listen(PORT, () => {
     console.log(`Notification Service running on port ${PORT}`);
 });

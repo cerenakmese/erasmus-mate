@@ -49,6 +49,13 @@ app.use('/api/travel', createProxyMiddleware({
     changeOrigin: true,
 }));
 
+app.use('/api/documents', createProxyMiddleware({
+    target: 'http://localhost:3003',
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+        return '/api/documents' + path;
+    }
+}));
 
 app.listen(PORT, () => {
     console.log(`API Gateway is listening on port ${PORT}`);

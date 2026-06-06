@@ -65,6 +65,13 @@ app.use('/api/notifications', createProxyMiddleware({
     }
 }));
 
+app.use('/api/residence-permits', createProxyMiddleware({
+    target: 'http://localhost:3002',
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+        return '/api/residence-permits' + path;
+    }
+}));
 
 app.listen(PORT, () => {
     console.log(`API Gateway is listening on port ${PORT}`);

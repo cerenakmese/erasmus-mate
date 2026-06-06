@@ -57,6 +57,15 @@ app.use('/api/documents', createProxyMiddleware({
     }
 }));
 
+app.use('/api/notifications', createProxyMiddleware({
+    target: 'http://localhost:3005',
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+        return '/api/notifications' + path;
+    }
+}));
+
+
 app.listen(PORT, () => {
     console.log(`API Gateway is listening on port ${PORT}`);
     console.log(`Routing /api/students traffic to http://localhost:3001`);

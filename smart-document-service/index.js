@@ -107,6 +107,27 @@ app.get('/api/documents', async (req, res) => {
         });
     }
 });
+app.get('/api/documents/expiring-soon', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM documents
+             WHERE expiration_date IS NOT NULL
+             AND expiration_date <= CURRENT_DATE + INTERVAL '90 days'
+             ORDER BY expiration_date ASC`
+        );
+
+        res.status(200).json({
+            message: 'Documents expiring within the next 90 days',
+            documents: result.rows
+        });
+
+    } catch (error) {
+        console.error('Error getting expiring documents:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Smart Document Service running on port ${PORT}`);

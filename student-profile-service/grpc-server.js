@@ -2,7 +2,7 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const pool = require('./db');
-const PROTO_PATH = path.join(__dirname, '../proto/student_profile.proto');
+const PROTO_PATH = path.join(__dirname, './student_profile.proto');
 
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -16,41 +16,39 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const studentProto = grpc.loadPackageDefinition(packageDefinition).student;
 
 
-const getStudentProfile = async (call, callback) => {
+async function getStudentProfile(call, callback) {
     try {
-        const studentId = call.request.student_id;
+        // Gelen int64 ID'yi taşma olmadan string formatında güvene alıyoruz
+        const requestedId = call.request.student_id.toString();
 
-        const result = await pool.query('SELECT * FROM students WHERE id = $1', [studentId]);
+        const result = await pool.query(
+            'SELECT * FROM students WHERE student_id = $1',
+            [requestedId]
+        );
 
-        if (result.rows.length === 0) {
-
+        if (result.rows.length > 0) {
+            const student = result.rows[0];
+            callback(null, {
+                id: student.student_id,
+                first_name: student.first_name,
+                last_name: student.last_name,
+                email: student.email,
+                home_university: student.home_university,
+                host_university: student.host_university
+            });
+        } else {
             callback({
                 code: grpc.status.NOT_FOUND,
                 details: "Student not found"
             });
-            return;
         }
-
-        const student = result.rows[0];
-
-
-        callback(null, {
-            id: student.id,
-            first_name: student.first_name,
-            last_name: student.last_name,
-            email: student.email,
-            home_university: student.home_university,
-            host_university: student.host_university
-        });
-
-    } catch (err) {
-        console.error("gRPC Error:", err);
+    } catch (error) {
         callback({
             code: grpc.status.INTERNAL,
             details: "Database error"
         });
     }
-};
+}
 
 const startGrpcServer = () => {
     const server = new grpc.Server();
@@ -63,6 +61,7 @@ const startGrpcServer = () => {
             console.error("Failed to bind gRPC server:", err);
             return;
         }
+        server.start();
         console.log(`Student Profile gRPC Server running on port ${port}`);
     });
 };

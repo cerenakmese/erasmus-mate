@@ -23,6 +23,83 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  student-profile-service:
+    build: ./student-profile-service
+    container_name: student-profile-service
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./student-profile-service/.env
+    depends_on:
+      - postgres-db
+
+  smart-document-service:
+    build: ./smart-document-service
+    container_name: smart-document-service
+    ports:
+      - "3003:3003"
+    env_file:
+      - ./smart-document-service/.env
+    depends_on:
+      - postgres-db
+    restart: always
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "3005:3005"
+    env_file:
+      - ./notification-service/.env # Ayarları doğrudan .env dosyasından okur
+    depends_on:
+      - postgres-db
+      - rabbitmq
+      - student-profile-service
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - student-profile-service
+      - smart-document-service
+      - notification-service
+      - residence-permit-service
+      - travel-planning-service
+
+  residence-permit-service:
+    build: ./residence-permit-service
+    container_name: residence-permit-service
+    ports:
+      - "3002:3002"
+    env_file:
+      - ./residence-permit-service/.env
+    depends_on:
+      - postgres-db
+
+  travel-planning-service:
+    build: ./travel-planning-service
+    container_name: travel-planning-service
+    ports:
+      - "3004:3004"
+    env_file:
+      - ./travel-planning-service/.env
+    depends_on:
+      - postgres-db
+
+  university-services-service:
+    build: ./university-services-service
+    container_name: university-services-service
+    ports:
+      - "3006:3006"
+    env_file:
+      - ./university-services-service/.env
+    depends_on:
+      - postgres-db
+      - rabbitmq
+      - student-profile-service
+
 volumes:
   pgdata:
   rabbitmq_data:

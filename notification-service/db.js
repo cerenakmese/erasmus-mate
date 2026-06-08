@@ -13,7 +13,7 @@ const initDb = async () => {
     const queryText = `
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
-        student_id INTEGER NOT NULL,
+        student_id BIGINT NOT NULL,
         type VARCHAR(100) NOT NULL,
         message TEXT NOT NULL,
         status VARCHAR(50) DEFAULT 'UNREAD',

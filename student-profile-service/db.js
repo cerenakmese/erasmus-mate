@@ -14,6 +14,7 @@ const initDb = async () => {
     const queryText = `
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
+        student_id BIGINT UNIQUE NOT NULL,
         first_name VARCHAR(100) NOT NULL,
         last_name VARCHAR(100) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,

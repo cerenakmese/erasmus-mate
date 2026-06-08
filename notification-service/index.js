@@ -1,144 +1,141 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
+const amqp = require('amqplib');
+const nodemailer = require('nodemailer');
+const path = require('path');
+const pool = require('./db');
+// --- YENİ EKLENEN gRPC KÜTÜPHANELERİ ---
+const grpc = require('@grpc/grpc-js');
+const protoLoader = require('@grpc/proto-loader');
 require('dotenv').config();
 
-const pool = require('./db');
-
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 const PORT = process.env.PORT || 3005;
 
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'Notification Service is running'
+// --- gRPC İSTEMCİ (CLIENT) AYARLARI ---
+const PROTO_PATH = path.join(__dirname, 'student.proto');
+const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String, // ÇOK KRİTİK: int64 (long long) taşmalarını önlemek için string olarak alıyoruz
+    enums: String,
+    defaults: true,
+    oneofs: true
+});
+const studentProto = grpc.loadPackageDefinition(packageDefinition).student;
+
+// docker-compose içindeki student profile servisinin adı ve portu (örnek: student-profile:50052)
+const grpcTarget = process.env.GRPC_STUDENT_TARGET || 'localhost:50052';
+const studentClient = new studentProto.StudentService(
+    grpcTarget,
+    grpc.credentials.createInsecure()
+);
+
+const connectedStudents = {};
+
+io.on('connection', (socket) => {
+    socket.on('register_student', (studentId) => {
+        connectedStudents[studentId] = socket.id;
+    });
+    socket.on('disconnect', () => {
+        for (let id in connectedStudents) {
+            if (connectedStudents[id] === socket.id) {
+                delete connectedStudents[id];
+                break;
+            }
+        }
     });
 });
 
-app.post('/api/notifications', async (req, res) => {
-    try {
-        const { student_id, type, message } = req.body;
-
-        if (!student_id || !type || !message) {
-            return res.status(400).json({
-                error: 'student_id, type and message are required'
-            });
-        }
-
-        const result = await pool.query(
-            `INSERT INTO notifications (student_id, type, message, status)
-             VALUES ($1, $2, $3, $4)
-             RETURNING *`,
-            [student_id, type, message, 'UNREAD']
-        );
-
-        res.status(201).json({
-            message: 'Notification created successfully',
-            notification: result.rows[0]
-        });
-
-    } catch (error) {
-        console.error('Error creating notification:', error);
-        res.status(500).json({
-            error: 'Internal server error'
-        });
+const transporter = nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    auth: {
+        user: process.env.EMAIL_USER || 'joel.kertzmann@ethereal.email',
+        pass: process.env.EMAIL_PASSWORD || 'mP6hKwF7F3x8T2Qy9s'
     }
 });
 
-app.get('/api/notifications', async (req, res) => {
+async function connectQueue() {
     try {
-        const result = await pool.query(
-            'SELECT * FROM notifications ORDER BY created_at DESC'
-        );
+        const connection = await amqp.connect(process.env.RABBITMQ_URL || 'amqp://localhost:5672');
+        const channel = await connection.createChannel();
+        const queue = 'notification_queue';
+        await channel.assertQueue(queue, { durable: true });
 
-        res.status(200).json(result.rows);
+        channel.consume(queue, async (msg) => {
+            if (msg !== null) {
+                const eventData = JSON.parse(msg.content.toString());
 
-    } catch (error) {
-        console.error('Error getting notifications:', error);
-        res.status(500).json({
-            error: 'Internal server error'
-        });
-    }
-});
+                try {
+                    // 1. Veritabanına kaydet
+                    await pool.query(
+                        `INSERT INTO notifications (student_id, type, message, status) VALUES ($1, $2, $3, $4)`,
+                        [eventData.student_id, eventData.type, eventData.message, 'UNREAD']
+                    );
 
-app.get('/api/notifications/student/:studentId', async (req, res) => {
-    try {
-        const { studentId } = req.params;
+                    // 2. gRPC İLE ÖĞRENCİ BİLGİLERİNİ ÇEK
+                    // ID'yi kesin olarak string formatına çevirerek yolluyoruz
+                    const studentIdStr = eventData.student_id.toString();
 
-        const result = await pool.query(
-            'SELECT * FROM notifications WHERE student_id = $1 ORDER BY created_at DESC',
-            [studentId]
-        );
+                    studentClient.getStudentProfile({ student_id: studentIdStr }, (err, response) => {
+                        if (err) {
+                            console.error("gRPC Error fetching student profile:", err);
+                            // Profil bulunamasa bile Socket.io bildirimini atmaya devam edebiliriz
+                            triggerSocketNotification(eventData);
+                            channel.ack(msg);
+                            return;
+                        }
 
-        res.status(200).json(result.rows);
+                        console.log(`gRPC Success: Fetched email ${response.email} for student ${response.id}`);
 
-    } catch (error) {
-        console.error('Error getting student notifications:', error);
-        res.status(500).json({
-            error: 'Internal server error'
-        });
-    }
-});
+                        // 3. GERÇEK E-POSTAYA GÖNDERİM
+                        transporter.sendMail({
+                            from: '"ErasmusMate System" <noreply@erasmusmate.com>',
+                            to: response.email, // Artık doğrudan öğrencinin kendi profiline kayıtlı maile gidiyor!
+                            subject: `New Notification: ${eventData.type}`,
+                            text: eventData.message
+                        }).catch(console.error);
 
-app.put('/api/notifications/:id/read', async (req, res) => {
-    try {
-        const { id } = req.params;
+                        triggerSocketNotification(eventData);
+                        channel.ack(msg);
+                    });
 
-        const result = await pool.query(
-            `UPDATE notifications
-             SET status = 'READ'
-             WHERE id = $1
-             RETURNING *`,
-            [id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                error: 'Notification not found'
-            });
-        }
-
-        res.status(200).json({
-            message: 'Notification marked as read',
-            notification: result.rows[0]
-        });
-
-    } catch (error) {
-        console.error('Error updating notification:', error);
-        res.status(500).json({
-            error: 'Internal server error'
-        });
-    }
-});
-app.post('/api/notifications/document-expiration', async (req, res) => {
-    try {
-        const { student_id, document_name, expiration_date } = req.body;
-
-        if (!student_id || !document_name || !expiration_date) {
-            return res.status(400).json({
-                error: 'student_id, document_name and expiration_date are required'
-            });
-        }
-
-        const message = `Your document "${document_name}" is expiring on ${expiration_date}. Please renew it before the deadline.`;
-
-        const result = await pool.query(
-            `INSERT INTO notifications (student_id, type, message)
-             VALUES ($1, $2, $3)
-             RETURNING *`,
-            [student_id, 'DOCUMENT_EXPIRATION', message]
-        );
-
-        res.status(201).json({
-            message: 'Document expiration notification created successfully',
-            notification: result.rows[0]
+                } catch (err) {
+                    console.error("Error processing message:", err);
+                    channel.nack(msg);
+                }
+            }
         });
     } catch (error) {
-        console.error('Error creating document expiration notification:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        setTimeout(connectQueue, 5000);
     }
+}
+
+// Ekran bildirimini fırlatan yardımcı fonksiyon
+function triggerSocketNotification(eventData) {
+    const studentSocketId = connectedStudents[eventData.student_id];
+    if (studentSocketId) {
+        io.to(studentSocketId).emit('receive_notification', {
+            type: eventData.type,
+            message: eventData.message,
+            timestamp: new Date()
+        });
+    }
+}
+
+connectQueue();
+
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'Notification Service with RabbitMQ & gRPC' });
 });
-app.listen(PORT, () => {
+
+server.listen(PORT, () => {
     console.log(`Notification Service running on port ${PORT}`);
 });

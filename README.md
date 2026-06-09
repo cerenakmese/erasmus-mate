@@ -1,0 +1,590 @@
+# ErasmusMate - Microservice Architecture Project
+
+ErasmusMate is an API-first microservice platform designed to support Erasmus and international students during their mobility process. The system helps students manage their profile, travel plans, smart documents, residence permit applications, university announcements and notifications.
+
+The project follows a microservice-oriented architecture where each domain is implemented as an independent service with its own responsibility and, where applicable, its own PostgreSQL database. The services are accessed through an API Gateway protected with JWT authentication.
+
+---
+
+## 1. Main Features
+
+The current implementation includes the following features:
+
+* Student registration and login
+* JWT-based authentication
+* API Gateway routing
+* Travel planning management
+* Smart document upload and classification
+* Document expiration date detection
+* Notification management
+* Residence permit application management
+* University announcement management
+* PostgreSQL database integration
+* Postman collection for testing the main API flow
+
+---
+
+## 2. Architecture Overview
+
+The system is composed of the following services:
+
+| Service                     | Port | Main Responsibility                                      |
+| --------------------------- | ---: | -------------------------------------------------------- |
+| API Gateway                 | 3000 | Single entry point, JWT validation and request routing   |
+| Student Profile Service     | 3001 | Student registration, login and profile management       |
+| Residence Permit Service    | 3002 | Residence permit applications and upcoming deadlines     |
+| Smart Document Service      | 3003 | Document upload, classification and expiration detection |
+| Travel Planning Service     | 3004 | Erasmus trip planning                                    |
+| Notification Service        | 3005 | Student notifications and document expiration alerts     |
+| University Services Service | 3006 | University announcements                                 |
+
+---
+
+## 3. Technologies Used
+
+* Node.js
+* Express.js
+* PostgreSQL
+* JWT authentication
+* API Gateway pattern
+* REST APIs
+* Postman
+* Docker files included for containerization support
+* RabbitMQ integration prepared in University Service, although local execution can be tested without RabbitMQ
+
+---
+
+## 4. Project Structure
+
+```text
+erasmus-mate/
+│
+├── api-gateway/
+├── student-profile-service/
+├── travel-planning-service/
+├── smart-document-service/
+├── notification-service/
+├── residence-permit-service/
+├── university-services-service/
+│
+├── docker-compose.yml
+├── init-dbs.sql
+├── ErasmusMate.postman_collection.json
+├── ErasmusMate_Proposal.pdf
+└── README.md
+```
+
+---
+
+## 5. Local Requirements
+
+Before running the project locally, make sure the following tools are installed:
+
+* Node.js
+* npm
+* PostgreSQL
+* Postman
+
+PostgreSQL must be running locally. The project uses separate databases for the services.
+
+---
+
+## 6. Databases
+
+The project uses the following PostgreSQL databases:
+
+```text
+student_profile_db
+residence_permit_db
+smart_document_db
+travel_planning_db
+notification_service_db
+university_service_db
+```
+
+These databases can be created manually or by using the provided `init-dbs.sql` file.
+
+---
+
+## 7. Environment Variables
+
+Each service requires a local `.env` file. These files are not included in the repository for security reasons.
+
+### API Gateway `.env`
+
+```env
+PORT=3000
+JWT_SECRET=erasmusmate_secret_key
+
+STUDENT_URL=http://localhost:3001
+TRAVEL_URL=http://localhost:3004
+DOCUMENT_URL=http://localhost:3003
+NOTIFICATION_URL=http://localhost:3005
+RESIDENCE_URL=http://localhost:3002
+UNIVERSITY_URL=http://localhost:3006
+```
+
+### Student Profile Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=student_profile_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3001
+JWT_SECRET=erasmusmate_secret_key
+```
+
+### Residence Permit Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=residence_permit_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3002
+```
+
+### Smart Document Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=smart_document_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3003
+```
+
+### Travel Planning Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=travel_planning_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3004
+```
+
+### Notification Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=notification_service_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3005
+```
+
+### University Services Service `.env`
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=university_service_db
+DB_PASSWORD=postgres
+DB_PORT=5432
+PORT=3006
+STUDENT_API_URL=http://localhost:3001/api/students
+RABBITMQ_URL=amqp://localhost:5672
+```
+
+---
+
+## 8. How to Run the Project Locally
+
+Open a separate terminal for each service.
+
+### 1. Start Student Profile Service
+
+```bash
+cd student-profile-service
+npm install
+npm run dev
+```
+
+Expected port:
+
+```text
+3001
+```
+
+### 2. Start Residence Permit Service
+
+```bash
+cd residence-permit-service
+npm install
+npm run dev
+```
+
+Expected port:
+
+```text
+3002
+```
+
+### 3. Start Smart Document Service
+
+```bash
+cd smart-document-service
+npm install
+npm run dev
+```
+
+Expected port:
+
+```text
+3003
+```
+
+### 4. Start Travel Planning Service
+
+```bash
+cd travel-planning-service
+npm install
+npm run dev
+```
+
+Expected port:
+
+```text
+3004
+```
+
+### 5. Start Notification Service
+
+```bash
+cd notification-service
+npm install
+npm run dev
+```
+
+Expected port:
+
+```text
+3005
+```
+
+### 6. Start University Services Service
+
+```bash
+cd university-services-service
+npm install
+npm start
+```
+
+Expected port:
+
+```text
+3006
+```
+
+The University Service may show RabbitMQ connection warnings if RabbitMQ is not running locally. The REST endpoints can still be tested.
+
+### 7. Start API Gateway
+
+```bash
+cd api-gateway
+npm install
+node index.js
+```
+
+Expected port:
+
+```text
+3000
+```
+
+---
+
+## 9. API Gateway
+
+The API Gateway runs on:
+
+```text
+http://localhost:3000
+```
+
+It validates JWT tokens and routes requests to the corresponding microservices.
+
+The health endpoint is public:
+
+```http
+GET http://localhost:3000/health
+```
+
+Student registration and login are also accessible without a token:
+
+```http
+POST http://localhost:3000/api/students/register
+POST http://localhost:3000/api/students/login
+```
+
+All other routes require a Bearer Token.
+
+---
+
+## 10. Main API Endpoints
+
+### Student Profile
+
+```http
+POST /api/students/register
+POST /api/students/login
+```
+
+### Travel Planning
+
+```http
+POST /api/travel/trips
+GET /api/travel/trips
+```
+
+### Smart Documents
+
+```http
+POST /api/documents
+GET /api/documents
+GET /api/documents/expiring-soon
+```
+
+### Notifications
+
+```http
+POST /api/notifications
+GET /api/notifications
+GET /api/notifications/student/:studentId
+PUT /api/notifications/:id/read
+POST /api/notifications/document-expiration
+```
+
+### Residence Permits
+
+```http
+POST /api/residence-permits
+GET /api/residence-permits
+GET /api/residence-permits/student/:studentId
+GET /api/residence-permits/upcoming-deadlines
+```
+
+### University Services
+
+```http
+GET /api/university/announcements
+POST /api/university/announcements
+```
+
+---
+
+## 11. Suggested Demo Flow
+
+A complete demo can be performed through Postman using the API Gateway.
+
+### Step 1: Check API Gateway health
+
+```http
+GET http://localhost:3000/health
+```
+
+### Step 2: Register a student
+
+```http
+POST http://localhost:3000/api/students/register
+```
+
+Example body:
+
+```json
+{
+  "first_name": "Ceren",
+  "last_name": "Akmeşe",
+  "email": "ceren@example.com",
+  "password": "mysecretpassword",
+  "home_university": "Gazi University",
+  "host_university": "Politecnico di Milano"
+}
+```
+
+### Step 3: Login and get JWT token
+
+```http
+POST http://localhost:3000/api/students/login
+```
+
+Example body:
+
+```json
+{
+  "email": "ceren@example.com",
+  "password": "mysecretpassword"
+}
+```
+
+The returned token must be used as a Bearer Token for the next requests.
+
+### Step 4: Create a trip
+
+```http
+POST http://localhost:3000/api/travel/trips
+```
+
+Example body:
+
+```json
+{
+  "student_id": 1,
+  "destination": "Rome, Italy",
+  "departure_date": "2026-06-10",
+  "return_date": "2026-06-15"
+}
+```
+
+### Step 5: Upload a smart document
+
+```http
+POST http://localhost:3000/api/documents
+```
+
+Example body:
+
+```json
+{
+  "student_id": 1,
+  "file_name": "health_insurance.pdf",
+  "uploaded_text": "Health Insurance Certificate valid until 2026-08-15"
+}
+```
+
+### Step 6: Check expiring documents
+
+```http
+GET http://localhost:3000/api/documents/expiring-soon
+```
+
+### Step 7: Create a document expiration notification
+
+```http
+POST http://localhost:3000/api/notifications/document-expiration
+```
+
+Example body:
+
+```json
+{
+  "student_id": 1,
+  "document_name": "health_insurance.pdf",
+  "expiration_date": "2026-08-15"
+}
+```
+
+### Step 8: Mark a notification as read
+
+```http
+PUT http://localhost:3000/api/notifications/1/read
+```
+
+### Step 9: Create a residence permit application
+
+```http
+POST http://localhost:3000/api/residence-permits
+```
+
+Example body:
+
+```json
+{
+  "student_id": 1,
+  "country": "Turkey",
+  "application_status": "PENDING",
+  "appointment_date": "2026-06-20",
+  "submission_deadline": "2026-06-25",
+  "notes": "Student must submit passport copy, health insurance and university acceptance letter."
+}
+```
+
+### Step 10: Check upcoming residence permit deadlines
+
+```http
+GET http://localhost:3000/api/residence-permits/upcoming-deadlines
+```
+
+### Step 11: Create a university announcement
+
+```http
+POST http://localhost:3000/api/university/announcements
+```
+
+Example body:
+
+```json
+{
+  "title": "Exam Schedule Update",
+  "content": "The university has published an updated exam schedule for Erasmus students."
+}
+```
+
+### Step 12: Get university announcements
+
+```http
+GET http://localhost:3000/api/university/announcements
+```
+
+---
+
+## 12. Postman Collection
+
+The repository includes a Postman collection:
+
+```text
+ErasmusMate.postman_collection.json
+```
+
+This collection contains the main API requests used to test the system.
+
+Recommended usage:
+
+1. Import the collection into Postman.
+2. Start all services locally.
+3. Start the API Gateway.
+4. Run login to generate a JWT token.
+5. Add the token to the protected requests.
+6. Execute the demo flow through the API Gateway.
+
+---
+
+## 13. Notes About RabbitMQ
+
+The University Services Service includes RabbitMQ logic prepared for publishing notification events when a new university announcement is created.
+
+For local testing, RabbitMQ is not required to validate the main REST flow. If RabbitMQ is not running, the service may show connection warnings, but the announcement endpoints can still work.
+
+This can be presented as an event-driven extension prepared for future integration with the Notification Service.
+
+---
+
+## 14. Current Status
+
+The current version of ErasmusMate provides a functional backend prototype based on microservices. The services can be run independently, communicate through an API Gateway, and use PostgreSQL for persistent data storage.
+
+The project demonstrates:
+
+* Service decomposition
+* API Gateway routing
+* JWT authentication
+* Independent service databases
+* RESTful communication
+* Smart document processing
+* Notification handling
+* Residence permit deadline tracking
+* University announcement management
+
+---
+
+## 15. Authors
+
+* Ceren Akmeşe
+* Yago Rodríguez de Pauli

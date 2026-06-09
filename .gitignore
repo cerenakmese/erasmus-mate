@@ -9,4 +9,5 @@ postgres_data/
 rabbitmq_data/
 
 .qodo/
-venv/
+venv/.DS_Store
+.venv/

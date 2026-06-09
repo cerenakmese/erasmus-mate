@@ -79,8 +79,11 @@ app.use('/api/residence-permits', createProxyMiddleware({
 app.use('/api/university', createProxyMiddleware({
     target: UNIVERSITY_URL,
     changeOrigin: true,
-    // No pathRewrite: university routes are at /api/university/... which matches
+    pathRewrite: (path, req) => {
+        return '/api/university' + path;
+    }
 }));
+
 
 app.listen(PORT, () => {
     console.log(`API Gateway is listening on port ${PORT}`);

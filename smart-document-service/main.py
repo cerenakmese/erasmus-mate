@@ -4,6 +4,7 @@ from typing import Optional
 import uvicorn
 import re
 import spacy
+from datetime import date, datetime
 from db import init_db, get_db_connection
 import pika
 import json
@@ -11,12 +12,77 @@ import os
 import grpc
 import student_profile_pb2
 import student_profile_pb2_grpc
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 app = FastAPI(title="Smart Document Service", description="AI-ready document processor")
+
+def publish_expiration_event(student_id, file_name, expiration_date):
+    # gRPC ile Öğrenci Profilini Çek
+    student_id_str = str(student_id)
+    grpc_target = os.getenv('GRPC_STUDENT_TARGET', 'localhost:50052')
+    try:
+        channel = grpc.insecure_channel(grpc_target)
+        stub = student_profile_pb2_grpc.StudentServiceStub(channel)
+        req = student_profile_pb2.GetStudentRequest(student_id=int(student_id_str))
+        profile_resp = stub.GetStudentProfile(req)
+        student_name = f"{profile_resp.first_name} {profile_resp.last_name}"
+    except Exception as e:
+        print(f"gRPC Error: Could not fetch student profile: {e}")
+        student_name = "Student"
+
+    # RabbitMQ'ya Event Gönder
+    try:
+        rabbitmq_url = os.getenv('RABBITMQ_URL', 'amqp://localhost:5672')
+        connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
+        channel_mq = connection.channel()
+        channel_mq.queue_declare(queue='notification_queue', durable=True)
+
+        event_data = {
+            "student_id": int(student_id_str),
+            "type": "DocumentExpiringSoon",
+            "message": f"Hello {student_name}, please be aware that your document '{file_name}' is expiring in exactly 30 days ({expiration_date})."
+        }
+        channel_mq.basic_publish(
+            exchange='',
+            routing_key='notification_queue',
+            body=json.dumps(event_data),
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+        print(f"Published DocumentExpiringSoon for {file_name}")
+        connection.close()
+    except Exception as e:
+        print(f"RabbitMQ Error: {e}")
+
+def check_expiring_documents():
+    print("Scheduler running: Checking for documents expiring in 30 days...")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Tam 30 gün sonra süresi dolacak belgeleri bul
+        cur.execute("""
+            SELECT student_id, file_name, expiration_date 
+            FROM documents 
+            WHERE expiration_date = CURRENT_DATE + INTERVAL '30 days'
+        """)
+        expiring_docs = cur.fetchall()
+        for doc in expiring_docs:
+            publish_expiration_event(student_id=doc[0], file_name=doc[1], expiration_date=doc[2])
+    except Exception as e:
+        print(f"Scheduler DB Error: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 # Uygulama başlarken veritabanı tablolarını kontrol et
 @app.on_event("startup")
 def startup_event():
     init_db()
+    # Scheduler'ı başlat
+    scheduler = BackgroundScheduler()
+    # Not: Gerçek senaryoda günde 1 kez çalışması için trigger='cron', hour=9 vb. kullanılır. 
+    # Ancak test edebilmeniz için şu an her 1 dakikada bir kontrol edecek şekilde ayarlandı.
+    scheduler.add_job(check_expiring_documents, IntervalTrigger(minutes=1))
+    scheduler.start()
 
 # İstemciden gelecek veri modeli
 class DocumentRequest(BaseModel):
@@ -24,6 +90,20 @@ class DocumentRequest(BaseModel):
     uploaded_text: str
 
 # Gelecekte bir Makine Öğrenmesi modeliyle değiştirilecek olan "Akıllı" analiz fonksiyonları
+def normalize_expiration_date(text: str) -> Optional[str]:
+    # YYYY-MM-DD veya YYYY-M-D biçimlerini destekle
+    match = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+    if not match:
+        return None
+
+    year, month, day = match.groups()
+    try:
+        parsed = datetime(int(year), int(month), int(day)).date()
+        return parsed.isoformat()
+    except ValueError:
+        return None
+
+
 def analyze_document(file_name: str, text: str):
     combined_text = f"{file_name} {text}"
     nlp = spacy.load("en_core_web_sm")
@@ -47,20 +127,14 @@ def analyze_document(file_name: str, text: str):
     # 2. TARİH ÇIKARMA (NER - Named Entity Recognition)
     exp_date = None
     
-    # SpaCy'nin metin içinde bulduğu anlamlı varlıkları (Entity) tarıyoruz
     for ent in doc.ents:
-        if ent.label_ == "DATE": # Eğer bulduğu şey bir tarihse
-            # Veritabanına uyumlu olması için YYYY-MM-DD formatında olup olmadığını test ediyoruz
-            date_match = re.search(r'\d{4}-\d{2}-\d{2}', ent.text)
-            if date_match:
-                exp_date = date_match.group(0)
+        if ent.label_ == "DATE":
+            exp_date = normalize_expiration_date(ent.text)
+            if exp_date:
                 break
-                
-    # Eğer SpaCy standart bir formatta tarih bulamazsa, güvenlik ağı olarak regex ile tekrar tara
+
     if not exp_date:
-        date_match = re.search(r'\d{4}-\d{2}-\d{2}', text)
-        if date_match:
-            exp_date = date_match.group(0)
+        exp_date = normalize_expiration_date(text)
 
     return doc_type, exp_date
 
@@ -164,7 +238,6 @@ def process_and_upload_document(doc: DocumentRequest, x_user_id: Optional[str] =
         channel_mq = connection.channel()
         channel_mq.queue_declare(queue='notification_queue', durable=True)
 
-        # DocumentUploaded eventi
         event_data = {
             "student_id": int(student_id_str),
             "type": "DocumentUploaded",
@@ -174,9 +247,30 @@ def process_and_upload_document(doc: DocumentRequest, x_user_id: Optional[str] =
             exchange='',
             routing_key='notification_queue',
             body=json.dumps(event_data),
-            properties=pika.BasicProperties(delivery_mode=2) # kalıcı mesaj
+            properties=pika.BasicProperties(delivery_mode=2)
         )
         print("Published DocumentUploaded event to RabbitMQ.")
+
+        if exp_date:
+            try:
+                expiration_date = datetime.fromisoformat(exp_date).date()
+                days_until = (expiration_date - date.today()).days
+                if 0 <= days_until <= 30:
+                    exp_event_data = {
+                        "student_id": int(student_id_str),
+                        "type": "DocumentExpiringSoon",
+                        "message": f"Hello {student_name}, your document '{doc.file_name}' is expiring in {days_until} days on {expiration_date}."
+                    }
+                    channel_mq.basic_publish(
+                        exchange='',
+                        routing_key='notification_queue',
+                        body=json.dumps(exp_event_data),
+                        properties=pika.BasicProperties(delivery_mode=2)
+                    )
+                    print("Published DocumentExpiringSoon event to RabbitMQ.")
+            except Exception as exp_err:
+                print(f"Expiration date parse error: {exp_err}")
+
         connection.close()
     except Exception as e:
         print(f"RabbitMQ Error: {e}")

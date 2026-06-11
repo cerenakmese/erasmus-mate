@@ -1,0 +1,551 @@
+{
+  "info": {
+    "_postman_id": "b0a998db-e3dd-4790-8288-7347c72b8f40",
+    "name": "ErasmusMate API Collection",
+    "description": "ErasmusMate Microservices - Complete API Collection.\n\nUsage:\n1. Import this collection into Postman.\n2. Register a student first.\n3. Login and copy the JWT token.\n4. Paste the token in the collection-level Authorization (Bearer Token).\n5. All other requests will use this token automatically.\n\nBase URL: http://localhost:3000 (API Gateway)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "51083594",
+    "_collection_link": "https://go.postman.co/collection/51083594-b0a998db-e3dd-4790-8288-7347c72b8f40?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "1. Student Profile Service",
+      "item": [
+        {
+          "name": "Register Student",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"student_id\": 22118080701,\n  \"first_name\": \"Ceren\",\n  \"last_name\": \"Akmese\",\n  \"email\": \"akmeseeceren@gmail.com\",\n  \"password\": \"ceren123\",\n  \"home_university\": \"Gazi University\",\n  \"host_university\": \"Technical University of Munich\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/students/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "students",
+                "register"
+              ]
+            },
+            "description": "Register a new student. No token required. Returns the created student object."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                  "    pm.environment.set('jwt_token',jsonData.token);",
+                  "    console.log('JWT token saved to collection variable!');",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"akmeseeceren@gmail.com\",\n  \"password\": \"ceren123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/students/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "students",
+                "login"
+              ]
+            },
+            "description": "Login with email and password. No token required.\n\nIMPORTANT: The test script automatically saves the JWT token to the {{jwt_token}} collection variable. You don't need to copy-paste it manually."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "students",
+                "health"
+              ]
+            },
+            "description": "Check if student profile service is running."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Smart Document Service",
+      "item": [
+        {
+          "name": "Upload Document (AI Analyze)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file_name\": \"health_insurance_2026.pdf\",\n  \"uploaded_text\": \"This document certifies that the student has valid health insurance coverage. Valid until 2026-06-30.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/documents/upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "upload"
+              ]
+            },
+            "description": "Upload a document for AI analysis.\n\nThe service will automatically:\n1. Detect document type (HEALTH_INSURANCE, PASSPORT, LEARNING_AGREEMENT, etc.) using SpaCy NLP.\n2. Extract the expiration date from the text.\n3. Save it to the database.\n4. Publish a 'DocumentUploaded' event to RabbitMQ -> Notification Service will send an email + Socket.io notification.\n\nRequires JWT token (Bearer Auth)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Documents",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ]
+            },
+            "description": "Get all documents belonging to the authenticated student.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expiring Documents (Within 90 Days)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/documents/expiring-soon",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "expiring-soon"
+              ]
+            },
+            "description": "Get documents that are expiring within 90 days.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/documents/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Residence Permit Service",
+      "item": [
+        {
+          "name": "Create Residence Permit",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"country\": \"Germany\",\n  \"submission_deadline\": \"2026-07-01\",\n  \"application_status\": \"PENDING\",\n  \"appointment_date\": \"2026-06-20\",\n  \"notes\": \"Need to bring original enrollment letter.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/residence-permits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "residence-permits"
+              ]
+            },
+            "description": "Create a new residence permit application.\n\nIMPORTANT: If the submission_deadline is within 30 days, the service will automatically:\n1. Fetch student name via gRPC from Student Profile Service.\n2. Publish a 'ResidenceDeadlineApproaching' event to RabbitMQ.\n3. Notification Service will send an email + Socket.io alert.\n\nTo test the automatic notification, use a submission_deadline that is within 30 days from today.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/residence-permits/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "residence-permits",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Travel Planning Service",
+      "item": [
+        {
+          "name": "Create Trip",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"Munich, Germany\",\n  \"departure_date\": \"2026-09-01\",\n  \"return_date\": \"2027-02-28\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/travel/trips",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "travel",
+                "trips"
+              ]
+            },
+            "description": "Create a new travel/trip plan for the authenticated student.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Trips",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/travel/trips",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "travel",
+                "trips"
+              ]
+            },
+            "description": "Get all trips belonging to the authenticated student.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/travel/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "travel",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. University Services",
+      "item": [
+        {
+          "name": "Get All Announcements",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/university/announcements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "university",
+                "announcements"
+              ]
+            },
+            "description": "Get all university announcements.\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Post New Announcement (Triggers Email to ALL Students!)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Important: Semester Schedule Change\",\n  \"content\": \"The start of the winter semester has been moved to October 15th. Please update your travel plans accordingly.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/university/announcements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "university",
+                "announcements"
+              ]
+            },
+            "description": "Post a new university announcement.\n\nThis is the most powerful endpoint in the system:\n1. The service fetches ALL registered students from Student Profile Service via REST.\n2. For each student, it publishes a 'NewAnnouncementPosted' event to RabbitMQ.\n3. Notification Service picks up each event, fetches the student's email via gRPC, and sends an individual email + Socket.io notification.\n\nRequires JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/university/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "university",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Notification Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "health"
+              ]
+            },
+            "description": "Check if Notification Service (Socket.io + RabbitMQ Consumer + Email) is running."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. API Gateway",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Check if the API Gateway (JWT validation + proxying) is running."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "jwt_token",
+      "value": "PASTE_YOUR_JWT_TOKEN_HERE_AFTER_LOGIN"
+    }
+  ]
+}

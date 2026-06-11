@@ -10,12 +10,39 @@ from datetime import date, datetime
 from db import init_db, get_db_connection
 import student_profile_pb2
 import student_profile_pb2_grpc
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 app = FastAPI(title="Residence Permit Service")
+
+def check_approaching_deadlines():
+    print("Scheduler running: Checking for residence permit deadlines in 30 days...")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT student_id, country, submission_deadline 
+            FROM residence_permits 
+            WHERE submission_deadline = CURRENT_DATE + INTERVAL '30 days'
+            AND application_status = 'PENDING'
+        """)
+        permits = cur.fetchall()
+        for permit in permits:
+            publish_deadline_event(student_id=permit[0], country=permit[1], deadline=permit[2])
+    except Exception as e:
+        print(f"Scheduler DB Error: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 @app.on_event("startup")
 def startup_event():
     init_db()
+    # Scheduler'ı başlat
+    scheduler = BackgroundScheduler()
+    # Test amaçlı her dakikada bir çalıştırıyoruz. Canlı ortamda cron kullanılmalıdır.
+    scheduler.add_job(check_approaching_deadlines, IntervalTrigger(minutes=1))
+    scheduler.start()
 
 class ResidencePermitRequest(BaseModel):
     country: str

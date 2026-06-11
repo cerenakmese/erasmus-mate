@@ -21,7 +21,7 @@ def init_db():
     cur.execute('''
         CREATE TABLE IF NOT EXISTS documents (
             id SERIAL PRIMARY KEY,
-            student_id INTEGER NOT NULL,
+            student_id BIGINT NOT NULL,
             file_name VARCHAR(255) NOT NULL,
             uploaded_text TEXT,
             detected_type VARCHAR(100),
@@ -29,6 +29,20 @@ def init_db():
             status VARCHAR(50) DEFAULT 'UPLOADED',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    ''')
+
+    cur.execute('''
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'documents'
+                  AND column_name = 'student_id'
+                  AND data_type = 'integer'
+            ) THEN
+                ALTER TABLE documents ALTER COLUMN student_id TYPE BIGINT;
+            END IF;
+        END$$;
     ''')
     
     conn.commit()

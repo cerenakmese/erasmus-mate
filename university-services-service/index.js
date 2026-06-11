@@ -30,7 +30,7 @@ async function connectRabbitMQ() {
 connectRabbitMQ();
 
 // GET all announcements
-app.get('/api/university/announcements', async (req, res) => {
+app.get('/announcements', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM announcements ORDER BY created_at DESC');
         res.status(200).json(result.rows);
@@ -40,7 +40,7 @@ app.get('/api/university/announcements', async (req, res) => {
 });
 
 // POST new announcement
-app.post('/api/university/announcements', async (req, res) => {
+app.post('/announcements', async (req, res) => {
     const { title, content } = req.body;
     try {
         const result = await pool.query(
@@ -53,10 +53,10 @@ app.post('/api/university/announcements', async (req, res) => {
         try {
             const fetch = (await import('node-fetch')).default; // Use dynamic import for fetch
             const studentRes = await fetch(STUDENT_API_URL);
-            
+
             if (studentRes.ok) {
                 const students = await studentRes.json();
-                
+
                 // Publish a notification event for each student
                 if (amqpChannel) {
                     students.forEach(student => {

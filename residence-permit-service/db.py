@@ -19,7 +19,7 @@ def init_db():
     cur.execute('''
         CREATE TABLE IF NOT EXISTS residence_permits (
             id SERIAL PRIMARY KEY,
-            student_id INT NOT NULL,
+            student_id BIGINT NOT NULL,
             country VARCHAR(100) NOT NULL,
             application_status VARCHAR(50) DEFAULT 'PENDING',
             appointment_date DATE,
@@ -28,6 +28,18 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # If the table already existed with student_id as INT, alter it to BIGINT.
+    cur.execute("""
+        SELECT data_type
+        FROM information_schema.columns
+        WHERE table_name = 'residence_permits'
+          AND column_name = 'student_id'
+    """)
+    result = cur.fetchone()
+    if result and result[0] == 'integer':
+        cur.execute('ALTER TABLE residence_permits ALTER COLUMN student_id TYPE BIGINT')
+
     conn.commit()
     cur.close()
     conn.close()

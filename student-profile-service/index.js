@@ -79,7 +79,7 @@ app.post('/api/students/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-            { student_id: user.rows[0].id, email: user.rows[0].email },
+            { student_id: user.rows[0].student_id, email: user.rows[0].email },
             JWT_SECRET,
             { expiresIn: '1h' }
         );

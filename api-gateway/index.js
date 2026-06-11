@@ -79,9 +79,7 @@ app.use('/api/residence-permits', createProxyMiddleware({
 app.use('/api/university', createProxyMiddleware({
     target: UNIVERSITY_URL,
     changeOrigin: true,
-    pathRewrite: (path, req) => {
-        return '/api/university' + path;
-    }
+    pathRewrite: { '^/api/university': '' } // Strip /api/university prefix; university service uses /announcements, /health
 }));
 
 

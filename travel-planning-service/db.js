@@ -14,7 +14,7 @@ const initDb = async () => {
     const queryText = `
       CREATE TABLE IF NOT EXISTS trips (
         id SERIAL PRIMARY KEY,
-        student_id INTEGER NOT NULL,
+        student_id BIGINT NOT NULL,
         destination VARCHAR(255) NOT NULL,
         departure_date DATE NOT NULL,
         return_date DATE,
@@ -23,6 +23,15 @@ const initDb = async () => {
     `;
     try {
         await pool.query(queryText);
+        const currentType = await pool.query(`
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = 'trips'
+              AND column_name = 'student_id'
+        `);
+        if (currentType.rows[0] && currentType.rows[0].data_type === 'integer') {
+            await pool.query('ALTER TABLE trips ALTER COLUMN student_id TYPE BIGINT');
+        }
         console.log("Travel database tables initialized successfully.");
     } catch (err) {
         console.error("Error initializing travel tables:", err);

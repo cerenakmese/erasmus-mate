@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const amqp = require('amqplib');
 const nodemailer = require('nodemailer');
 const path = require('path');
@@ -15,6 +16,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 const PORT = process.env.PORT || 3005;
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_erasmus_key_2026';
 
 app.use(cors());
 app.use(express.json());
@@ -39,16 +41,48 @@ const studentClient = new studentProto.StudentService(
 
 const connectedStudents = {};
 
-io.on('connection', (socket) => {
-    socket.on('register_student', (studentId) => {
-        connectedStudents[studentId] = socket.id;
+// JWT Verification Middleware for Socket.io
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token || socket.handshake.query.token;
+
+    if (!token) {
+        return next(new Error('Socket.io: Authentication token required'));
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return next(new Error('Socket.io: Invalid or expired token'));
+        }
+
+        // Token'dan student_id'yi al ve socket'e ekle
+        socket.student_id = decoded.student_id;
+        socket.user = decoded;
+        next();
     });
+});
+
+io.on('connection', (socket) => {
+    const studentId = socket.student_id?.toString();
+
+    if (studentId) {
+        socket.join(studentId);
+        connectedStudents[studentId] = socket.id;
+        console.log(`Socket authenticated and registered for student ${studentId}: ${socket.id}`);
+    }
+
+    socket.on('register_student', (registerData) => {
+        // Only allow re-registration with same authenticated student
+        if (socket.student_id?.toString() !== registerData?.toString()) {
+            console.warn(`Attempted registration mismatch for socket ${socket.id}`);
+            return;
+        }
+        console.log(`Socket explicit register for student ${socket.student_id}`);
+    });
+
     socket.on('disconnect', () => {
-        for (let id in connectedStudents) {
-            if (connectedStudents[id] === socket.id) {
-                delete connectedStudents[id];
-                break;
-            }
+        if (connectedStudents[studentId] === socket.id) {
+            delete connectedStudents[studentId];
+            console.log(`Socket disconnected for student ${studentId}: ${socket.id}`);
         }
     });
 });
@@ -57,8 +91,8 @@ const transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
     auth: {
-        user: process.env.EMAIL_USER || 'joel.kertzmann@ethereal.email',
-        pass: process.env.EMAIL_PASSWORD || 'mP6hKwF7F3x8T2Qy9s'
+        user: process.env.EMAIL_USER || 'danny.labadie69@ethereal.email',
+        pass: process.env.EMAIL_PASS || 'spXcFHwXNV21TUh5aZ'
     }
 });
 
@@ -120,14 +154,27 @@ async function connectQueue() {
 
 // Ekran bildirimini fırlatan yardımcı fonksiyon
 function triggerSocketNotification(eventData) {
-    const studentSocketId = connectedStudents[eventData.student_id];
+    const normalizedId = eventData.student_id?.toString();
+    if (!normalizedId) {
+        console.warn("Cannot trigger socket notification: missing student_id", eventData);
+        return;
+    }
+
+    const studentSocketId = connectedStudents[normalizedId];
     if (studentSocketId) {
-        io.to(studentSocketId).emit('receive_notification', {
+        const payload = {
             type: eventData.type,
             message: eventData.message,
             timestamp: new Date()
-        });
+        };
+
+        io.to(studentSocketId).emit('receive_notification', payload);
+
+        console.log(`Emitted ${eventData.type} to student ${normalizedId} (socketId=${studentSocketId})`);
+        return;
     }
+
+    console.log(`No active socket found for student ${normalizedId}. Notification stored in DB only.`);
 }
 
 connectQueue();

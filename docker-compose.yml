@@ -100,6 +100,17 @@ services:
       - rabbitmq
       - student-profile-service
 
+  chatting-service:
+    build: ./chatting-service
+    container_name: chatting-service
+    ports:
+      - "3007:3007"
+    env_file:
+      - ./chatting-service/.env
+    depends_on:
+      - postgres-db
+      - rabbitmq
+
 volumes:
   pgdata:
   rabbitmq_data:

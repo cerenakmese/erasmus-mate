@@ -82,6 +82,16 @@ app.use('/api/university', createProxyMiddleware({
     pathRewrite: { '^/api/university': '' } // Strip /api/university prefix; university service uses /announcements, /health
 }));
 
+const CHATTING_URL = process.env.CHATTING_URL || 'http://chatting-service:3007';
+
+// Diğer app.use proxy ayarlarının yanına (örneğin app.use('/api/university', ...) sonrasına) ekle:
+app.use('/api/chat', createProxyMiddleware({
+    target: CHATTING_URL,
+    changeOrigin: true,
+    ws: true, // Socket.io trafiğinin (WebSocket) Gateway üzerinden geçmesi için ZORUNLU
+    pathRewrite: { '^/api/chat': '' } // /api/chat kısmını siler, servise sadece devamını gönderir
+}));
+
 
 app.listen(PORT, () => {
     console.log(`API Gateway is listening on port ${PORT}`);

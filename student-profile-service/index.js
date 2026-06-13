@@ -91,6 +91,20 @@ app.post('/api/students/login', async (req, res) => {
     }
 });
 
+app.get('/api/students', async (req, res) => {
+    try {
+        // Güvenlik gereği password_hash hariç diğer tüm bilgileri veritabanından çekiyoruz
+        const allStudents = await pool.query(
+            'SELECT student_id, first_name, last_name, email, home_university, host_university FROM students'
+        );
+
+        res.status(200).json(allStudents.rows);
+    } catch (err) {
+        console.error("Öğrenciler getirilirken hata oluştu:", err.message);
+        res.status(500).send('Server error');
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Student Profile Service (REST) running on port ${PORT}`);
     startGrpcServer();
